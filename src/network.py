@@ -81,6 +81,7 @@ class BNN:
         for i in range(0,self.num_layers):
             layer = self.layers[i]
             layer.prior.updatePriorVals(layer.weights,layer.biases)
+            
     
     ## MUST CALL FEED_FORWARD BEFORE USING THIS FUNCTION
     def log_like_val(self):
@@ -150,17 +151,18 @@ class BNN:
             self.updateAllGradients(include_prior=include_prior)
             for j in range(0,self.num_layers):
                 layer = self.layers[j]
+#print " For Layer:",j, "the step size is:",step_size, "gW:",layer.gW," and gB:",layer.gB
                 layer.weights += step_size*layer.gW
                 layer.biases += step_size*layer.gB
             
-            if np.mod(i,100) == 0:
+            if np.mod(i,1) == 0:
                 if verbose:
                     print 'Iteration: ' + str(i)
                     print 'Log-liklihood value: ' + str(self.log_like_val())
                     print 'Posterior value: ' + str(self.posterior_kernel_val())
                     print 'Current accuracy: ' + str(self.getTrainAccuracy())
             
-            if (i > iters) or (self.getTrainAccuracy() >= target_acc):
+            if (i > iters) :
                 done = True
             i += 1
         
@@ -202,7 +204,11 @@ class BNN:
         plt.xticks(rotation=90)
         plt.ion()
         plt.show()
-        
+    def printWeightMeans(self):
+        for i,l in enumerate(self.layers):
+            data = l.weights.get()
+            mean = np.mean(data)
+            print "Mean of weights of Layer %d:%f"%(i,mean)
     def plotWeightTraceForVariable(self,varID):
         layer = self.layers[0]
         data = np.zeros(shape=(layer.weights.shape[1],len(layer.posterior_weights)))

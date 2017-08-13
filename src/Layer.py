@@ -92,7 +92,8 @@ class Softmax_Layer(Layer):
         b = np.random.normal(0,init_sd,(1,n_classes))
         self.weights = gpuarray.to_gpu(w.copy().astype(precision))
         self.gW = gpuarray.empty_like(self.weights)
-                        
+#print self.weights                
+#       print init_sd
         self.biases = gpuarray.to_gpu(b.copy().astype(precision))
         self.gB = gpuarray.empty_like(self.biases)
         
@@ -224,13 +225,17 @@ class Softmax_Layer(Layer):
     
     def getTrainAccuracy(self,Y):
         accuracy = 0.0
+        rmsd = 0.0
         #if self.layer_types[-1] == 'softmax':
         preds = (self.outputs.get())
         Y_cpu = Y.get()
         errors = 0.0
         for i in range(0,len(preds)):
+            rmsd += (Y_cpu[i][0] - preds[i][0])**2
             errors += 1.0-Y_cpu[i,preds[i].argmax()]    
         accuracy = 1.0 - errors/len(preds)
+        rmsd = rmsd**0.5
+        print "RMSD accuracy:%f"%rmsd
         return accuracy
     
 class Gaussian_Layer(Layer):
@@ -385,7 +390,10 @@ class Sigmoid_Layer(Layer):
         self.N = N
         w = np.random.normal(0,init_sd,(self.n_incoming,self.n_units))
         b = np.random.normal(0,init_sd,(1,n_units))
-        
+        print init_sd
+#       print w
+#        print b
+#        sys.exit()
         self.weights = gpuarray.to_gpu(w.copy().astype(precision))
         self.gW = gpuarray.empty_like(self.weights)
         
@@ -507,6 +515,7 @@ class Sigmoid_Layer(Layer):
         return self.n_units
     
     def getTotalKineticEnergy(self):
+#print "Layer Sigmoid:", self.pW.get()
         return (self.pW.get()**2).sum() + (self.pB.get()**2).sum()
 
     def scaleMomentum(self):

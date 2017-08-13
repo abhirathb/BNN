@@ -84,8 +84,21 @@ class ARD_Prior(Prior):
         weights_cpu = weights.get()
         n_w = np.float32(weights_cpu.shape[1])
         shape_new = self.shape + n_w/2.0
+
         for i in range(0,len(weights_cpu)):
             scale_new =  self.scale + ((weights_cpu[i])**2).sum()/2.0
+            
+            '''        print "-"*20
+            print i,weights_cpu[i],weights_cpu[i]**2
+            print "-"*20
+            if np.isnan(scale_new):
+                scale_new = self.scale
+                print " the new scale generated has an error. returning to old for this calc"
+                print "-"*20
+                print i,weights_cpu[i],weights_cpu[i]**2
+                print "-"*20
+            print scale_new, " SCALE NEW"
+            '''
             new_val = invgamma.rvs(shape_new,scale=scale_new,size=1)
             new_sW[0,i] = np.float32(new_val)
             new_mean[0,i] = np.float32(scale_new/(shape_new-1.0))
@@ -100,6 +113,7 @@ class ARD_Prior(Prior):
         n_b = np.float32(biases.shape[1])
         shape_new = self.shape + n_b/2.0
         scale_new =  self.scale  + ((biases_cpu)**2).sum()/2.0
+#        print "NEW SCALE 2 in ARD update:",scale_new
         new_val = invgamma.rvs(shape_new,scale=scale_new,size=1)
         new_sB = np.float32(new_val)
         self.sB = gpuarray.to_gpu(new_sB)
@@ -184,8 +198,10 @@ class Gaussian_Unit_Prior(Prior):
         weights_cpu = weights.get()
         n_w = np.float32(weights_cpu.shape[0])
         shape_new = self.shape + n_w/2.0
+#       print " update function 2 "
         for i in range(0,weights_cpu.shape[1]):
             scale_new =  self.scale + ((weights_cpu[:,i])**2).sum()/2.0
+#           print "SCALE:",scale_new
             new_val = invgamma.rvs(shape_new,scale=scale_new,size=1)
             new_sW[0,i] = np.float32(new_val)
         self.sW = gpuarray.to_gpu(new_sW.astype(self.precision))
@@ -229,7 +245,7 @@ class Gaussian_Layer_Prior(Prior):
         self.shape = shape
         self.scale = scale
         
-        init_var = np.float32(100.0)
+        init_var = np.ndarray((1,),np.float32(100.0)) #change into ndarray by AB
         self.sW = gpuarray.to_gpu(init_var)
         
         init_var = invgamma.rvs(1.0,scale=1.0,size=(1,1)).astype(precision)
@@ -267,6 +283,7 @@ class Gaussian_Layer_Prior(Prior):
         n_w = np.float32(weights_cpu.shape[0]*weights_cpu.shape[1])
         shape_new = self.shape + n_w/2.0
         scale_new =  self.scale + (weights_cpu**2).sum()/2.0
+#       print "SCALE:", scale_new
         new_val = invgamma.rvs(shape_new,scale=scale_new,size=1)
         #print 'New standard deviation for feature ' + ': ' + str(new_val)
         new_sW = np.float32(new_val)
