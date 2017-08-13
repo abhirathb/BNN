@@ -6,7 +6,7 @@ Created on Tue Jul  2 14:52:48 2013
 """
 import numpy as np
 import matplotlib.pyplot as plt
-
+import math
 class HMC_sampler:
     def __init__(self,net,L,eps,scale=False,debug=False,track_vars=list()):
         self.L = L
@@ -76,6 +76,7 @@ class HMC_sampler:
                     print 'Updating Hyper Parameters'
             self.HMC_sample(self.L,eps,T=T,verbose=verbose,persist=persist)
             T = np.max([eta*T,1.0])
+
             if self.sim > n_burnin:
                 if self.debug and len(self.posterior_ARDMean) > 1:
                     self.track()
@@ -85,7 +86,9 @@ class HMC_sampler:
                 for i in range(0,self.net.num_layers):
                     self.net.layers[i].addPosteriorWeightSample(self.net.layers[i].weights.get())
                     self.net.layers[i].addPosteriorBiasSample(self.net.layers[i].biases.get())
-    
+#self.getARDSummary(useMedian=False)
+#        self.net.printWeightMeans()
+#    self.getARDSummary()
     def dual_average_sim(self,n_keep,n_burnin,eps0=0.01,delta=0.65,lam=1.0,eps_bar0=1.0,H_bar0=0.0,gamma=0.05,t0=10.0,k=10.0,max_eps=1.0,verbose=False):
         #Set up initial values for params        
         mu = np.log10(10.0*eps0)        
@@ -168,16 +171,19 @@ class HMC_sampler:
         for i in range(0,len(self.net.layers)):            
             self.net.layers[i].setWeights(self.current_weights[i])
             self.net.layers[i].setBiases(self.current_biases[i])
-            
             self.net.layers[i].pW = self.current_pW[i]
             self.net.layers[i].pB = self.current_pB[i]
+
+# print "NOW LAYER:",i,self.net.layers[i].pW, self.current_pW[i]
+#          print "---------"
+
 
     def negateMomenta(self):
         for i in range(0,len(self.net.layers)):            
             self.net.layers[i].pW = -1*self.current_pW[i]
             self.net.layers[i].pB = -1*self.current_pB[i]
 
-    def plotARD(self,featureID,useMedian=False):
+    def plotARD(self,featureID,ID,useMedian=False):
         P = self.net.layers[0].prior.sW.shape[1]
         for i in range(0,P):
             current_var = np.zeros(len(self.posterior_sd))
@@ -194,7 +200,8 @@ class HMC_sampler:
         plt.plot(x,current_var)
         plt.title('Trace of posterior samples for feature ' + str(featureID+1))
         plt.ion()
-        plt.show()  
+   #     plt.show()  
+        plt.savefig('ard_%d-%d'%(ID,featureID))
     
     def getARDSummary(self,plot=0,useMedian=False):
         P = self.net.layers[0].prior.sW.shape[1]
@@ -373,10 +380,12 @@ class HMC_sampler:
         return hit   
     
             
-    def HMC_sample(self,L,eps,persist=0.0,T=1.0,verbose=False):        
+    def HMC_sample(self,L,eps,persist=0.0,T=1.0,verbose=False,always_accept=False):        
         
         self.net.feed_forward()        
-        self.net.update_all_momenta(persist)
+#       print "Training accuracy during HMC-step 1: %f"%self.net.getTrainAccuracy()
+#self.net.update_all_momenta(persist)   COMMENTED OUT TO CHECK IF THIS STOPS CHANGE OF K
+        self.scale=False
         if self.scale:
             for i in range(0,len(self.net.layers)):
                 layer = self.net.layers[i]                
@@ -394,6 +403,7 @@ class HMC_sampler:
                 #Update outputs for each layer
                 self.net.feed_forward()
                 self.net.updateAllGradients()
+#               print "Training accuracy during HMC-step 2: %f"%self.net.getTrainAccuracy()
                 #take a half step for momentum
                 layer = self.net.layers[i]      
                 
@@ -405,11 +415,15 @@ class HMC_sampler:
                 
                 #take a full step for parameters
                 layer.weights += epsW_component*layer.pW
+#         print layer.weights[0][0] == 0.0
+#               if math.isnan(layer.weights[0][0]):
+#                   print "GOT A NAN"
                 layer.biases += epsB_component*layer.pB
                 
                 #Update outputs for each layer
                 self.net.feed_forward()
                 self.net.updateAllGradients()
+#               print "Training accuracy during HMC-step 3: %f"%self.net.getTrainAccuracy()
                 #take a final half step for momentum
                 layer.pW = layer.pW + (epsW_component/2.0)*layer.gW
                 layer.pB = layer.pB + (epsB_component/2.0)*layer.gB
@@ -417,6 +431,7 @@ class HMC_sampler:
         
         self.net.feed_forward()
         self.net.updateAllGradients()        
+#print "Training accuracy during HMC-step 4: %f"%self.net.getTrainAccuracy()
         ##Calculate log_posterior value at current parameter estimates
         proposed_u = self.net.posterior_kernel_val()
         #Divide by T in the case of SA
@@ -426,7 +441,8 @@ class HMC_sampler:
         alpha = np.min([0,diff])
         u = np.log(np.random.random(1)[0])
         self.log_alpha = alpha
-        
+# print "the difference between hamiltonians and the random number to compare with:",diff,u 
+#if u < diff or always_accept==True:
         if u < diff:
             msg = 'Accept!'
             self.accept += 1.0
@@ -441,9 +457,11 @@ class HMC_sampler:
                     metric = 'RMSE'
                 print '----------------------------'
                 print 'Current U: ' + str(current_u)
-                print 'Proposed U: ' + str(proposed_u)      
                 print 'Current K: ' + str(current_k)
+                print 'Current H: ' + str(current_u -current_k)
                 print 'Proposed K: ' + str(proposed_k)      
+                print 'Proposed U: ' + str(proposed_u)      
+                print 'Proposed H: ' + str(proposed_u - proposed_k)
                 print 'Total diff: ' + str(diff)
                 print 'Current log-like: ' + str(init_ll)
                 print 'Proposed log-like: ' + str(self.net.log_like_val())
